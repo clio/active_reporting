@@ -21,7 +21,12 @@ class ActiveReporting::ReportTest < Minitest::Test
   end
 
   def datetime_testable_periods
-    %i[minute hour day week month quarter year decade century millennium]
+    if ENV['DB'] == 'mysql'
+      %i[minute hour day week month quarter year]
+    else
+      %i[minute hour day week month quarter year decade century millennium]
+    end
+
   end
 
   def test_run_returns_an_array
