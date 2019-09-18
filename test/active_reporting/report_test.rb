@@ -6,6 +6,24 @@ class ActiveReporting::ReportTest < Minitest::Test
     @report = ActiveReporting::Report.new(@metric)
   end
 
+  def users_created_in_different_testable_time_periods
+    t = User.last.created_at # Existing seed users a good reference point
+    users = [User.create(username: 'user_minute', created_at: t - 1.minute)]
+    users << User.create(username: 'user_hour', created_at: t - 1.hour)
+    users << User.create(username: 'user_day', created_at: t - 1.day)
+    users << User.create(username: 'user_week', created_at: t - 1.week)
+    users << User.create(username: 'user_month', created_at: t - 1.month)
+    users << User.create(username: 'user_quarter', created_at: t - 3.months)
+    users << User.create(username: 'user_year', created_at: t - 1.year)
+    users << User.create(username: 'user_decade', created_at: t - 10.years)
+    users << User.create(username: 'user_century', created_at: t - 100.years)
+    users << User.create(username: 'user_millennium', created_at: t - 1000.years)
+  end
+
+  def datetime_testable_periods
+    %i[minute hour day week month quarter year decade century millennium]
+  end
+
   def test_run_returns_an_array
     assert @report.run.is_a?(Array), 'result is not an array'
   end
@@ -32,18 +50,72 @@ class ActiveReporting::ReportTest < Minitest::Test
     assert data.all? { |r| r.key?('a_metric') }
   end
 
+  def test_report_runs_aggregate_with_expression
+    metric = ActiveReporting::Metric.new(
+      :a_metric,
+      fact_model: FigureFactModel,
+      dimensions: [:kind],
+      aggregate: { count: :kind_is_card }
+    )
+    report = ActiveReporting::Report.new(metric)
+    data = report.run
+    data.reject { |d| d['kind'] == 'amiibo card' }.each do |d|
+      assert d['a_metric'].zero?
+    end
+    assert(data.find { |d| d['kind'] == 'amiibo card' }['a_metric'] == 552)
+  end
+
+  def test_report_count_is_zero_with_aggregate_expression
+    metric = ActiveReporting::Metric.new(
+      :a_metric,
+      fact_model: FigureFactModel,
+      dimensions: [:kind],
+      aggregate: { count: :kind_is_foo }
+    )
+    report = ActiveReporting::Report.new(metric)
+    data = report.run
+    assert data.all? { |r| r['a_metric'].zero? }
+  end
+
   def test_report_runs_with_a_date_grouping
-    if ENV['DB'] == 'pg'
-      metric = ActiveReporting::Metric.new(:a_metric, fact_model: UserFactModel, dimensions: [{created_at: :month}])
-      report = ActiveReporting::Report.new(metric)
-      data = report.run
-      assert data.all? { |r| r.key?('created_at_month') }
-      assert data.size == 5
+    if %w[pg mysql].include?(ENV['DB'])
+      users = users_created_in_different_testable_time_periods
+      # Based on the 5 users created in seed.rb and the 10 just created,
+      # we can expect 11 different data segments when dimensioning by minute.
+      expected_result_size_when_dimensioning_by_minute = 11
+      datetime_testable_periods.each_with_index do |period, i|
+        metric = ActiveReporting::Metric.new(
+          :a_metric,
+          fact_model: UserFactModel,
+          dimensions: [{created_at: period}]
+        )
+        report = ActiveReporting::Report.new(metric)
+        data = report.run
+        assert data.all? { |r| r.key?("created_at_#{period}") }
+        # As we expand the time period dimension, we can expect one less result
+        assert data.size == expected_result_size_when_dimensioning_by_minute - i
+      end
+      users.each(&:destroy!) # Cleanup
     else
       assert_raises ActiveReporting::InvalidDimensionLabel do
         metric = ActiveReporting::Metric.new(:a_metric, fact_model: UserFactModel, dimensions: [{created_at: :month}])
         report = ActiveReporting::Report.new(metric)
       end
     end
+  end
+
+  def test_report_sum_is_520_x_20_with_aggregate_expression
+    metric = ActiveReporting::Metric.new(
+      :a_metric,
+      fact_model: FigureFactModel,
+      dimensions: [:kind],
+      aggregate: { sum: :return_20_when_card }
+    )
+    report = ActiveReporting::Report.new(metric)
+    data = report.run
+    data.reject { |d| d['kind'] == 'amiibo card' }.each do |d|
+      assert d['a_metric'].zero?
+    end
+    assert(data.find { |d| d['kind'] == 'amiibo card' }['a_metric'] == 552 * 20)
   end
 end

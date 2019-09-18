@@ -219,11 +219,12 @@ class PhoneFactModel < ActiveReporting::FactModel
 end
 ```
 
-### Implicit hierarchies with datetime columns (PostgreSQL support only)
+### Implicit hierarchies with datetime columns
 
 The fastest approach to group by certain date metrics is to create so-called "date dimensions". For
-those Postgres users that are restricted from organizing their data in this way, Postgres provides
-a way to group by `datetime` column data on the fly using the `date_trunc` function.
+those users that are restricted from organizing their data in this way, There is a mechanism
+to group by `datetime` column data on the fly -- on Postgres, this is done using the `date_trunc` function;
+on MySQL, this is done using some messy code utilizing the `INTERVAL` function.
 
 To use, declare a datetime dimension on a fact model as normal:
 
@@ -233,9 +234,7 @@ class UserFactModel < ActiveReporting::FactModel
 end
 ```
 
-When creating a metric, ActiveReporting will recognize implicit hierarchies for this dimension. The hierarchies correspond to the [values](https://www.postgresql.org/docs/8.1/static/functions-datetime.html#FUNCTIONS-DATETIME-TRUNC) supported by PostgreSQL. (See example under the metric section, below.)
-
-*NOTE*: PRs welcomed to support this functionality in other databases.
+When creating a metric, ActiveReporting will recognize implicit hierarchies for this dimension. The hierarchies correspond to the [values](https://www.postgresql.org/docs/8.1/static/functions-datetime.html#FUNCTIONS-DATETIME-TRUNC) supported by PostgreSQL and have been ported over for identical use under MySQL. (See example under the metric section, below.)
 
 ## Configuring Dimension Filters
 
@@ -267,6 +266,21 @@ class TicketFactModel < ActiveReporting::FactModel
 end
 ```
 
+## Configuring Aggregate Expressions
+
+If you need more granular control over any aggregate function (e.g., `SUM`, `COUNT`, `AVG`, etc.), you can declare an [aggregate expression](https://www.postgresql.org/docs/8.2/static/functions-aggregate.html) in the fact model. This use case can arise if you need multiple aggregates on identical data sets, or if creative results are desired from the aggregate function.
+
+The declaration takes the raw SQL expression that you want to use:
+
+```ruby
+class TicketFactModel < ActiveReporting::FactModel
+  aggregate_expression :my_custom_expression,
+                       "CASE WHEN name = 'foo' THEN 5 END"
+end
+```
+
+Whatever expression you choose, it is important to remember that aggregate functions consider all non-`null` results -- so anything you want to exclude should compute to `null`.
+
 ## ActiveReporting::Metric
 
 A `Metric` is the basic building block used to describe a question you want to answer. At minimum, a metric needs a name, a fact table and an aggregate. You can expand a metric further by including dimensions and dimension filters.
@@ -283,7 +297,7 @@ my_metric = ActiveReporting::Metric.new(
 
 `fact_model` - An `ActiveReporting::FactModel` class
 
-`aggregate` - The SQL aggregate used to calculate the metric. Supported aggregates include count, max, min, avg, and sum. (Default: `:count`)
+`aggregate` - The SQL aggregate used to calculate the metric. Supported aggregates include count, max, min, avg, and sum. (Default: `:count`.) You can also specify an aggregate expression (discussed above) if you defined one in your fact model: `aggregate: { count: :my_custom_expression }` or `aggregate: { sum: :my_custom_expression }`-- and the expression declared in the fact model will be used by the database in the function (e.g., `SUM(CASE WHEN name = 'foo' THEN 1 END)`).
 
 `dimensions` - An array of dimensions used for the metric. When given just a symbol, the default dimension label will be used for the dimension. You may specify a hierarchy level by using a hash. (Examples: `[:sales_rep, {order_date: :month}]`). In hierarchies you can customize the label in this way: `[{order_date: { field: :month, name: :a_custom_name_for_month }}]`. If you use a hash instead of a Symbol to define a hierarchy the `field` item must be a valid field in your table. The `name` can be whatever label you want.
 
@@ -293,7 +307,7 @@ my_metric = ActiveReporting::Metric.new(
 
 `order_by_dimension` - Allows you to set the ordering of the results based on a dimension label. (Examples: `{author: :desc}`, `{sales_ref: :asc}`)
 
-For those using Postgres, you can take advantage of implicit hierarchies in `datetime` columns, as mentioned above:
+You can also take advantage of implicit hierarchies in `datetime` columns, as mentioned above:
 
 ```ruby
 class UserFactModel < ActiveReporting::FactModel

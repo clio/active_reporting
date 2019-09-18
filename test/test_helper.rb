@@ -25,8 +25,16 @@ when 'mysql'
   ActiveRecord::Base.establish_connection(
     adapter:  'mysql2',
     database: 'active_reporting_test',
+    # username: 'mysql', # Uncomment if you need this
+    # password: 'mysql', # Uncomment if you need this
     encoding: 'utf8'
   )
+  if ActiveReporting::FunctionAdapters::Mysql.date_trunc_function_exists?
+    ActiveRecord::Base.connection.execute(
+      'DROP FUNCTION IF EXISTS ACTIVE_REPORTING_DATE_TRUNC'
+    )
+  end
+  ActiveReporting::FunctionAdapters::Mysql.create_date_trunc_function
 when 'sqlite'
   ActiveRecord::Base.establish_connection(
     adapter: 'sqlite3',
