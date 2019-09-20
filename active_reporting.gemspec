@@ -7,12 +7,12 @@ require 'active_reporting/version'
 Gem::Specification.new do |spec|
   spec.name          = 'active_reporting'
   spec.version       = ActiveReporting::VERSION
-  spec.authors       = ['Tony Drake']
-  spec.email         = ['t27duck@gmail.com']
+  spec.authors       = ['Clio']
+  spec.email         = ['developers@clio.com']
 
   spec.summary       = 'Add relational OLAP-like functionality for ActiveRecord'
   # spec.description   = 'TODO: Write a longer description or delete this line.'
-  spec.homepage      = 'https://github.com/t27duck/active_reporting'
+  spec.homepage      = 'https://github.com/clio/active_reporting'
   spec.license       = 'MIT'
 
   spec.files = `git ls-files -z`.split("\x0").reject do |f|
