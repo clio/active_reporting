@@ -29,6 +29,10 @@ end
 class SeriesFactModel < ActiveReporting::FactModel
 end
 
+class PlatformFactModel < ActiveReporting::FactModel
+  dimension_hierarchy %i[name]
+end
+
 class DateDimensionFactModel < ActiveReporting::FactModel
   default_dimension_label :date
 

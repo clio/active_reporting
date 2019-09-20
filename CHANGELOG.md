@@ -1,3 +1,23 @@
+## 0.4.2 (2019-11-01)
+
+### Misc
+
+* Test against Rails 6.0 final
+* Fixed deprecated call to `to_hash` - *joshforbes*
+* Corrected readme entry for `dimesions` option for `ActiveReporting::Metric` - *joshforbes*
+
+## 0.4.1 (2019-05-28)
+
+### Features
+
+* Hierarchical dimensions may now have custom keys in result (#16) - *andresgutgon*
+
+### Misc
+
+* Test against Raisl 6.0RC
+* Loosen AR requirements. The gem will install for any AR version, but only ones listed in the README are supported
+* Test against active Rubies
+
 ## 0.4.0 (2018-05-02)
 
 ### Breaking Changes
@@ -15,7 +35,7 @@
 * Specify rescue from LoadError for ransack (#9) - *niborg*
 * Fix ransack fallback logic (#8) - *germanotm*
 
-## Misc
+### Misc
 
 * Test against Rails 5.2
 * Test against Ruby 2.5

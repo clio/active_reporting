@@ -8,9 +8,9 @@ ActiveReporting implements various terminology used in Relational Online Analyti
 
 ActiveReporting officially supports MySQL, PostgreSQL, and SQLite.
 
-ActiveReporting officially supports Ruby 2.3, 2.4, and 2.5.
+ActiveReporting officially supports Ruby 2.4 and later. Other versions may work, but are not supported.
 
-ActiveReporting officially supports Rails 4.2, 5.1, and 5.2.
+ActiveReporting officially supports Rails 4.2, 5.1, 5.2, and 6.0. Other versions may work, but are not supported.
 
 ## Installation
 
@@ -299,7 +299,7 @@ my_metric = ActiveReporting::Metric.new(
 
 `aggregate` - The SQL aggregate used to calculate the metric. Supported aggregates include count, max, min, avg, and sum. (Default: `:count`.) You can also specify an aggregate expression (discussed above) if you defined one in your fact model: `aggregate: { count: :my_custom_expression }` or `aggregate: { sum: :my_custom_expression }`-- and the expression declared in the fact model will be used by the database in the function (e.g., `SUM(CASE WHEN name = 'foo' THEN 1 END)`).
 
-`dimensions` - An array of dimensions used for the metric. When given just a symbol, the default dimension label will be used for the dimension. You may specify a hierarchy level by using a hash. (Examples: `[:sales_rep, {order_date: :month}]`)
+`dimensions` - An array of dimensions used for the metric. When given just a symbol, the default dimension label will be used for the dimension. You may specify a hierarchy level by using a hash. (Examples: `[:sales_rep, {order_date: :month}]`). In hierarchies you can customize the label in this way: `[{order_date: { field: :month, name: :a_custom_name_for_month }}]`. If you use a hash instead of a Symbol to define a hierarchy the `field` item must be a valid field in your table. The `name` can be whatever label you want.
 
 `dimension_filter` - A hash were the keys are dimension filter names and the values are the values passed into the filter.
 
@@ -356,7 +356,7 @@ metric = ActiveReporting::Metric.new(
   dimension_filter: {months_ago: 1}
 )
 
-report = ActiveReporting.new(metric, dimension_filter: {from_region: 'North'}, dimension_identifiers: false)
+report = ActiveReporting::Report.new(metric, dimension_filter: {from_region: 'North'}, dimension_identifiers: false)
 report.run
 => [{order_count: 17, sales_rep: 'Mary Sue'}]
 ```
