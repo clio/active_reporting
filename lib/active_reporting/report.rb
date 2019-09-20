@@ -93,10 +93,11 @@ module ActiveReporting
 
         inner_select = "SELECT #{distinct}, #{fact_model.measure.to_s} #{inner_columns}"
         inner_from = statement.to_sql.split('FROM').last
+        group_by = group_by_statement
 
 
         # Finally, construct the query we want and return it as a string
-        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T"
+        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T #{group_by}"
 
       else
         parts = {
