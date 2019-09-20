@@ -36,7 +36,7 @@ module ActiveReporting
     private ######################################################################
 
     def build_data
-      @data = model.connection.exec_query(statement.to_sql).to_a
+      @data = model.connection.exec_query(statement).to_hash
       apply_dimension_callbacks
       @data
     end
@@ -49,24 +49,74 @@ module ActiveReporting
       end
     end
 
+    # Builds the sql statement to execute
+    #
+    # @return [String]
     def statement
-      parts = {
-        select: select_statement,
-        joins: dimension_joins,
-        group: group_by_statement,
-        having: having_statement,
-        order: order_by_statement
-      }
+      case @metric.aggregate
+      when :sum
+        parts = {
+          select: select_statement,
+          joins: dimension_joins,
+          having: having_statement,
+          order: order_by_statement
+        }
 
-      statement = ([model] + parts.keys).inject do |chain, method|
-        chain.public_send(method, parts[method])
+        statement = ([model] + parts.keys).inject do |chain, method|
+          chain.public_send(method, parts[method])
+        end
+
+        statement = process_scope_dimension_filter(statement)
+        statement = process_lambda_dimension_filter(statement)
+        statement = process_ransack_dimension_filter(statement)
+
+        # The original gem did not handle has_many relationships. In order to support
+        # has_many, we need to first do an inner query to select out distinct rows _before_
+        # attempting the sum. Therefore we build up the query piece
+        # by piece rather than using the basic statement.
+
+        outer_select = outer_select_statement.join(',')
+
+        # In some situations the column we're summing over is not included as a part of the aggregation
+        # in the inner query. In such cases we must explicitly select the desired column in the inner
+        # query, so that we can sum over it in the outer query.
+        if select_aggregate.include?("CASE")
+          selection_metric = ",#{select_aggregate.split('CASE WHEN ').last.split(' ').first}"
+        else
+          selection_metric = ''
+        end
+
+        inner_columns = ",#{inner_select_statement.join(',')}"
+        if selection_metric && !inner_columns.include?(selection_metric)
+          inner_columns = "#{selection_metric}#{inner_columns}"
+        end
+
+        inner_select = "SELECT #{distinct}, #{fact_model.measure.to_s} #{inner_columns}"
+        inner_from = statement.to_sql.split('FROM').last
+
+
+        # Finally, construct the query we want and return it as a string
+        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T"
+
+      else
+        parts = {
+          select: select_statement,
+          joins: dimension_joins,
+          group: group_by_statement,
+          having: having_statement,
+          order: order_by_statement
+        }
+
+        statement = ([model] + parts.keys).inject do |chain, method|
+          chain.public_send(method, parts[method])
+        end
+
+        statement = process_scope_dimension_filter(statement)
+        statement = process_lambda_dimension_filter(statement)
+        statement = process_ransack_dimension_filter(statement)
+
+        statement.to_sql
       end
-
-      statement = process_scope_dimension_filter(statement)
-      statement = process_lambda_dimension_filter(statement)
-      statement = process_ransack_dimension_filter(statement)
-
-      statement
     end
 
     def select_statement
@@ -75,11 +125,24 @@ module ActiveReporting
       ss.flatten
     end
 
+    def outer_select_statement
+      ss = ["#{select_aggregate} AS #{@metric.name}"]
+      ss += @dimensions.map { |d| d.select_statement_no_rename(with_identifier: @dimension_identifiers) }
+      ss.flatten
+    end
+
+    def inner_select_statement
+      ss = @dimensions.map { |d| d.select_statement_always_rename(with_identifier: @dimension_identifiers) }
+      ss.flatten
+    end
+
+    def distinct
+      "DISTINCT `#{@metric.model.name_without_component.downcase.pluralize}`.`id`"
+    end
+
     def select_aggregate
       case @metric.aggregate
       when :count
-        distinct = "DISTINCT `#{@metric.model.name_without_component.downcase.pluralize}`.`id`"
-
         count_params = if @metric.aggregate_expression
                          "#{distinct}, #{@metric.aggregate_expression}"
                        else

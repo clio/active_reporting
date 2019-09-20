@@ -11,35 +11,16 @@ module ActiveReporting
       Array(dimensions).map do |dim|
         dimension_name, label = dim.is_a?(Hash) ? Array(dim).flatten : [dim, nil]
         found_dimension = fact_model.dimensions[dimension_name.to_sym]
-
-        raise(UnknownDimension, "Dimension '#{dim}' not found on fact model '#{fact_model}'") if found_dimension.nil?
-
-        new(found_dimension, label_config(label))
+        raise UnknownDimension, "Dimension '#{dim}' not found on fact model '#{fact_model}'" if found_dimension.nil?
+        new(found_dimension, label: label)
       end
     end
 
-    # If you pass a symbol it means you just indicate
-    # the field on that dimension. With a hash you can
-    # customize the name of the label
-    #
-    # @param [Symbol|Hash] label
-    def self.label_config(label)
-      return { label: label } unless label.is_a?(Hash)
-
-      {
-        label: label[:field],
-        label_name: label[:name]
-      }
-    end
-
     # @param dimension [ActiveReporting::Dimension]
-    # @option label [Maybe<Symbol>] Hierarchical dimension to be used as a label
-    # @option label_name [Maybe<Symbol|String>] Hierarchical dimension custom name
-    def initialize(dimension, label: nil, label_name: nil)
+    # @option label [Symbol] Hierarchical dimension to be used as a label
+    def initialize(dimension, label: nil)
       @dimension = dimension
-
-      determine_label_field(label)
-      determine_label_name(label_name)
+      determine_label(label)
     end
 
     # The foreign key to use in queries
@@ -54,9 +35,32 @@ module ActiveReporting
     # @return [Array]
     def select_statement(with_identifier: true)
       return [degenerate_select_fragment] if type == Dimension::TYPES[:degenerate]
-
-      ss = ["#{label_fragment} AS #{@label_name}"]
+      ss = ["#{label_fragment} AS #{name}"]
       ss << "#{identifier_fragment} AS #{name}_identifier" if with_identifier
+      ss
+    end
+
+    # Fragments of a select statement for queries that use the dimension
+    # but where we always want to rename, even if the fragment is degenerate
+    # (aka if it is not a foreign key)
+    #
+    # @return [Array]
+    def select_statement_always_rename(with_identifier: true)
+      return [name] if type == Dimension::TYPES[:degenerate]
+      ss = ["#{label_fragment} AS #{name}"]
+      ss << "#{identifier_fragment} AS #{name}_identifier" if with_identifier
+      ss
+    end
+
+    # Fragment of a select statement for queries that use a dimension
+    # but without renaming returned columnns with 'AS'
+    #
+    # @return [ARRAY]
+    def select_statement_no_rename(with_identifier: true)
+      return [name] if type == Dimension::TYPES[:degenerate]
+
+      ss = ["#{name}"]
+      ss << "#{name}_identifier" if with_identifier
       ss
     end
 
@@ -90,16 +94,12 @@ module ActiveReporting
 
     private ####################################################################
 
-    def determine_label_field(label_field)
-      @label = if label_field.present? && validate_hierarchical_label(label_field)
-                 label_field.to_sym
+    def determine_label(label)
+      @label = if label.present? && validate_hierarchical_label(label)
+                 label.to_sym
                else
                  dimension_fact_model.dimension_label || Configuration.default_dimension_label
                end
-    end
-
-    def determine_label_name(label_name)
-      @label_name = label_name ? "#{name}_#{label_name}" : name
     end
 
     def validate_hierarchical_label(hierarchical_label)
