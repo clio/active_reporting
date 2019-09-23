@@ -75,6 +75,19 @@ module ActiveReporting
       group
     end
 
+    # Fragments of a group by clause for queries that use the dimension, using
+    # the renamed label. Note that we always rename here, even if the fragment
+    # is degenerate (aka if it is not a foreign key)
+    #
+    # @return [Array]
+    def group_by_statement_with_rename(with_identifier: true)
+      return [name] if type == Dimension::TYPES[:degenerate]
+
+      group = [name]
+      group << "#{name}_identifier" if with_identifier
+      group
+    end
+
     # Fragment of an order by clause for queries that sort by the dimension
     #
     # @return [String]

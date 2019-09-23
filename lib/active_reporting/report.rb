@@ -86,18 +86,17 @@ module ActiveReporting
           selection_metric = ''
         end
 
-        inner_columns = ",#{inner_select_statement.join(',')}"
+        inner_columns = ",#{inner_select_statement.join(', ')}"
         if selection_metric && !inner_columns.include?(selection_metric)
           inner_columns = "#{selection_metric}#{inner_columns}"
         end
 
         inner_select = "SELECT #{distinct}, #{fact_model.measure.to_s} #{inner_columns}"
         inner_from = statement.to_sql.split('FROM').last
-        group_by = group_by_statement
-
+        group_by = outer_group_by_statement.join(', ')
 
         # Finally, construct the query we want and return it as a string
-        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T #{group_by}"
+        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
       else
         parts = {
@@ -162,6 +161,10 @@ module ActiveReporting
 
     def group_by_statement
       @dimensions.map { |d| d.group_by_statement(with_identifier: @dimension_identifiers) }
+    end
+
+    def outer_group_by_statement
+      @dimensions.map { |d| d.group_by_statement_with_rename(with_identifier: @dimension_identifiers) }
     end
 
     def process_scope_dimension_filter(chain)
