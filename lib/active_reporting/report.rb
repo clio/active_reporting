@@ -75,7 +75,18 @@ module ActiveReporting
         # attempting the sum. Therefore we build up the query piece
         # by piece rather than using the basic statement.
 
-        outer_select = outer_select_statement.join(',')
+        # TODO: CLEAN UP THESE COMMENTS
+
+        # We need to ensure that we include all columns from the original SELECT query in the
+        # inner select, so grab these first. Also save each renamed column names (aka "AS name")
+        # into a separate array to be included in the outer query
+
+        # Drop the first element here because it's the SUM and we'll add that later
+        orig_select = parts[:select].drop(1)#.join(', ').remove("\n").squeeze(' ') PUT THIS BACK TO CLEAN IT UP
+        orig_renames = []
+        orig_select.each do |sel|
+          orig_renames << sel.split(' AS ').last#.remove("\n").squeeze(' ') YOU DONT NEED THIS HERE PROBABLY
+        end
 
         # In some situations the column we're summing over is not included as a part of the aggregation
         # in the inner query. In such cases we must explicitly select the desired column in the inner
@@ -91,9 +102,12 @@ module ActiveReporting
           inner_columns = "#{selection_metric}#{inner_columns}"
         end
 
-        inner_select = "SELECT #{distinct}, #{fact_model.measure.to_s} #{inner_columns}"
+
+        inner_select = "SELECT #{distinct}, #{orig_select.join(', ')}, #{fact_model.measure.to_s} #{inner_columns}" # TODO: ENSURE NO DUPLICATES in what you select
         inner_from = statement.to_sql.split('FROM').last
         group_by = outer_group_by_statement.join(', ')
+
+        outer_select = "#{outer_select_statement.join(', ')}, #{orig_renames.join(', ')}" # TODO: ENSURE NO DUPLICATES in what you select
 
         # Finally, construct the query we want and return it as a string
         "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
