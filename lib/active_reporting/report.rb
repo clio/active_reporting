@@ -123,7 +123,6 @@ module ActiveReporting
         outer_select = "#{outer_columns.join(', ')}"
 
         # Finally, construct the query we want and return it as a string
-        puts "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}" # XXXXXXX TEMP FOR TESTING REMOVE
         "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
       else
