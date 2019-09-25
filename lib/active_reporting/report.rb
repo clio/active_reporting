@@ -123,29 +123,11 @@ module ActiveReporting
       end
     end
 
-    # Helper to merge two lists of columns into a single SELECT statement
-    # SQL does not permit duplicate column names within a select
-    #
-    #def merge_column_lists(list1, list2)
-    #  (list1 + list2).uniq
-    #end
-
     def select_statement
       ss = ["#{select_aggregate} AS #{@metric.name}"]
       ss += @dimensions.map { |d| d.select_statement(with_identifier: @dimension_identifiers) }
       ss.flatten
     end
-
-    #def outer_select_statement
-    #  ss = ["#{select_aggregate} AS #{@metric.name}"]
-    #  ss += @dimensions.map { |d| d.select_statement_no_rename(with_identifier: @dimension_identifiers) }
-    #  ss.flatten
-    #end
-
-    #def inner_select_statement
-    #  ss = @dimensions.map { |d| d.select_statement_always_rename(with_identifier: @dimension_identifiers) }
-    #  ss.flatten
-    #end
 
     def distinct
       "DISTINCT `#{@metric.model.name_without_component.downcase.pluralize}`.`id`"
