@@ -92,24 +92,38 @@ module ActiveReporting
         # in the inner query. In such cases we must explicitly select the desired column in the inner
         # query, so that we can sum over it in the outer query.
         if select_aggregate.include?("CASE")
-          selection_metric = ",#{select_aggregate.split('CASE WHEN ').last.split(' ').first}"
-        else
-          selection_metric = ''
+          selection_metric = select_aggregate.split('CASE WHEN ').last.split(' ').first
+#        else
+#          selection_metric = nil
         end
 
-        inner_columns = ",#{inner_select_statement.join(', ')}"
-        if selection_metric && !inner_columns.include?(selection_metric)
-          inner_columns = "#{selection_metric}#{inner_columns}"
-        end
+        # ORIG
+        #inner_columns = ",#{inner_select_statement.join(', ')}"
+        #if selection_metric && !inner_columns.include?(selection_metric)
+        #  inner_columns = "#{selection_metric}#{inner_columns}"
+        #end
 
+        # UPDATED
+        inner_columns = inner_select_statement #<----inner_select_statement is where custom_created_at is coming from fwiw
+        inner_columns << selection_metric if selection_metric
 
-        inner_select = "SELECT #{distinct}, #{orig_select.join(', ')}, #{fact_model.measure.to_s} #{inner_columns}" # TODO: ENSURE NO DUPLICATES in what you select
+        #inner_columns = merge_column_lists(orig_select, inner_columns) # STILL SOMETHING WRONG HERE YOU NEED TO SEE
+        inner_columns << orig_select
+        inner_columns << fact_model.measure.to_s
+        inner_columns = inner_columns.flatten.uniq.join(', ').remove("\n").squeeze(' ') # remove and squeeze just to make it prettier
+
+        #ORIG
+        #inner_select = "SELECT #{distinct}, #{orig_select.join(', ')}, #{fact_model.measure.to_s} #{inner_columns}"
+        inner_select = "SELECT #{distinct}, #{inner_columns}"
         inner_from = statement.to_sql.split('FROM').last
         group_by = outer_group_by_statement.join(', ')
 
-        outer_select = "#{outer_select_statement.join(', ')}, #{orig_renames.join(', ')}" # TODO: ENSURE NO DUPLICATES in what you select
+        outer_columns = merge_column_lists(outer_select_statement, orig_renames)
+        #outer_select = "#{outer_select_statement.join(', ')}, #{orig_renames.join(', ')}" # TODO: ENSURE NO DUPLICATES in what you select
+        outer_select = "#{outer_columns.join(', ')}"
 
         # Finally, construct the query we want and return it as a string
+        puts "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}" # XXXXXXX TEMP FOR TESTING REMOVE
         "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
       else
@@ -131,6 +145,13 @@ module ActiveReporting
 
         statement.to_sql
       end
+    end
+
+    # Helper to merge two lists of columns into a single SELECT statement
+    # SQL does not permit duplicate column names within a select
+    #
+    def merge_column_lists(list1, list2)
+      (list1 + list2).uniq
     end
 
     def select_statement
