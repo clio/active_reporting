@@ -75,65 +75,32 @@ module ActiveReporting
         # attempting the sum. Therefore we build up the query piece
         # by piece rather than using the basic statement.
 
-        # This is out of hand, take a step back and try again
-# ***************************
-        # TODO: CLEAN UP THESE COMMENTS
+        sum_definition = parts[:select].first
+        original_columns = parts[:select].drop(1)
 
-        # We need to ensure that we include all columns from the original SELECT query in the
-        # inner select, so grab these first. Also save each renamed column names (aka "AS name")
-        # into a separate array to be included in the outer query
-
-        # Drop the first element here because it's the SUM and we'll add that later
-        orig_select = parts[:select].drop(1)#.join(', ').remove("\n").squeeze(' ') PUT THIS BACK TO CLEAN IT UP
-        orig_renames = []
-        orig_select.each do |sel|
-          orig_renames << sel.split(' AS ').last#.remove("\n").squeeze(' ') YOU DONT NEED THIS HERE PROBABLY
+        # Collect a list of all renamed columns from the original query so that we can include
+        # these in the outer query.
+        renamed_columns = []
+        original_columns.each do |sel|
+          renamed_columns << sel.split(' AS ').last
         end
 
         # In some situations the column we're summing over is not included as a part of the aggregation
         # in the inner query. In such cases we must explicitly select the desired column in the inner
         # query, so that we can sum over it in the outer query.
-        if select_aggregate.include?("CASE")
-          selection_metric = select_aggregate.split('CASE WHEN ').last.split(' ').first
-        else
-          selection_metric = ''
-        end
+        summation_metric = if select_aggregate.include?("CASE")
+                             select_aggregate.split('CASE WHEN ').last.split(' ').first
+                           else
+                             ''
+                           end
 
-        # ORIG
-        #inner_columns = ",#{inner_select_statement.join(', ')}"
-        #if selection_metric && !inner_columns.include?(selection_metric)
-        #  inner_columns = "#{selection_metric}#{inner_columns}"
-        #end
-
-        # UPDATED
-        inner_columns = inner_select_statement #<----inner_select_statement is where custom_created_at is coming from fwiw
-        inner_columns << selection_metric if selection_metric
-
-        #inner_columns = merge_column_lists(orig_select, inner_columns) # STILL SOMETHING WRONG HERE YOU NEED TO SEE
-        inner_columns << orig_select
-        inner_columns << fact_model.measure.to_s
-        inner_columns = inner_columns.flatten.uniq.join(', ').remove("\n").squeeze(' ') # remove and squeeze just to make it prettier
-
-        #ORIG
-        #inner_select = "SELECT #{distinct}, #{orig_select.join(', ')}, #{fact_model.measure.to_s} #{inner_columns}"
-        inner_select = "SELECT #{distinct}, #{inner_columns}"
+        outer_columns = ([sum_definition] << renamed_columns).flatten.uniq.join(', ')
+        inner_columns = (original_columns << [summation_metric, fact_model.measure.to_s]).flatten.uniq.reject(&:blank?).join(', ').remove("\n").squeeze(' ')
         inner_from = statement.to_sql.split('FROM').last
         group_by = outer_group_by_statement.join(', ')
-
-        outer_columns = merge_column_lists(outer_select_statement, orig_renames) # YOU CAN PROBABLY JUST USE UNIQUE HERE
-        #outer_select = "#{outer_select_statement.join(', ')}, #{orig_renames.join(', ')}" # TODO: ENSURE NO DUPLICATES in what you select
-        outer_select = "#{outer_columns.join(', ')}"
-#*************************************
-
-        # Second attempt - anything extra that's not used in the block below can be deleted
-        outer_columns = ([select_statement.first] << orig_renames).flatten.uniq.join(', ')
-        inner_columns = (select_statement.drop(1) << [selection_metric, fact_model.measure.to_s]).flatten.uniq.reject(&:blank?).join(', ').remove("\n").squeeze(' ')
-        inner_from = statement.to_sql.split('FROM').last
-        group_by = outer_group_by_statement.join(', ')
-        "SELECT #{outer_columns} FROM(SELECT #{distinct}, #{inner_columns} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
         # Finally, construct the query we want and return it as a string
-        #"SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
+        "SELECT #{outer_columns} FROM(SELECT #{distinct}, #{inner_columns} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
       else
         parts = {
@@ -159,9 +126,9 @@ module ActiveReporting
     # Helper to merge two lists of columns into a single SELECT statement
     # SQL does not permit duplicate column names within a select
     #
-    def merge_column_lists(list1, list2)
-      (list1 + list2).uniq
-    end
+    #def merge_column_lists(list1, list2)
+    #  (list1 + list2).uniq
+    #end
 
     def select_statement
       ss = ["#{select_aggregate} AS #{@metric.name}"]
@@ -169,16 +136,16 @@ module ActiveReporting
       ss.flatten
     end
 
-    def outer_select_statement
-      ss = ["#{select_aggregate} AS #{@metric.name}"]
-      ss += @dimensions.map { |d| d.select_statement_no_rename(with_identifier: @dimension_identifiers) }
-      ss.flatten
-    end
+    #def outer_select_statement
+    #  ss = ["#{select_aggregate} AS #{@metric.name}"]
+    #  ss += @dimensions.map { |d| d.select_statement_no_rename(with_identifier: @dimension_identifiers) }
+    #  ss.flatten
+    #end
 
-    def inner_select_statement
-      ss = @dimensions.map { |d| d.select_statement_always_rename(with_identifier: @dimension_identifiers) }
-      ss.flatten
-    end
+    #def inner_select_statement
+    #  ss = @dimensions.map { |d| d.select_statement_always_rename(with_identifier: @dimension_identifiers) }
+    #  ss.flatten
+    #end
 
     def distinct
       "DISTINCT `#{@metric.model.name_without_component.downcase.pluralize}`.`id`"
