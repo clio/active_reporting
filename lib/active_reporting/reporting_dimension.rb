@@ -81,7 +81,7 @@ module ActiveReporting
     #
     # @return [Array]
     def group_by_statement_with_rename(with_identifier: true)
-      return [name] if type == Dimension::TYPES[:degenerate]
+      return [degenerate_fragment] if type == Dimension::TYPES[:degenerate]
 
       group = [name]
       group << "#{name}_identifier" if with_identifier

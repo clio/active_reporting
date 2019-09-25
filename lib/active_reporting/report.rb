@@ -75,6 +75,8 @@ module ActiveReporting
         # attempting the sum. Therefore we build up the query piece
         # by piece rather than using the basic statement.
 
+        # This is out of hand, take a step back and try again
+# ***************************
         # TODO: CLEAN UP THESE COMMENTS
 
         # We need to ensure that we include all columns from the original SELECT query in the
@@ -93,8 +95,8 @@ module ActiveReporting
         # query, so that we can sum over it in the outer query.
         if select_aggregate.include?("CASE")
           selection_metric = select_aggregate.split('CASE WHEN ').last.split(' ').first
-#        else
-#          selection_metric = nil
+        else
+          selection_metric = ''
         end
 
         # ORIG
@@ -118,12 +120,20 @@ module ActiveReporting
         inner_from = statement.to_sql.split('FROM').last
         group_by = outer_group_by_statement.join(', ')
 
-        outer_columns = merge_column_lists(outer_select_statement, orig_renames)
+        outer_columns = merge_column_lists(outer_select_statement, orig_renames) # YOU CAN PROBABLY JUST USE UNIQUE HERE
         #outer_select = "#{outer_select_statement.join(', ')}, #{orig_renames.join(', ')}" # TODO: ENSURE NO DUPLICATES in what you select
         outer_select = "#{outer_columns.join(', ')}"
+#*************************************
+
+        # Second attempt - anything extra that's not used in the block below can be deleted
+        outer_columns = ([select_statement.first] << orig_renames).flatten.uniq.join(', ')
+        inner_columns = (select_statement.drop(1) << [selection_metric, fact_model.measure.to_s]).flatten.uniq.reject(&:blank?).join(', ').remove("\n").squeeze(' ')
+        inner_from = statement.to_sql.split('FROM').last
+        group_by = outer_group_by_statement.join(', ')
+        "SELECT #{outer_columns} FROM(SELECT #{distinct}, #{inner_columns} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
         # Finally, construct the query we want and return it as a string
-        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
+        #"SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T GROUP BY #{group_by}"
 
       else
         parts = {
