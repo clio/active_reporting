@@ -75,29 +75,37 @@ module ActiveReporting
         # attempting the sum. Therefore we build up the query piece
         # by piece rather than using the basic statement.
 
-        outer_select = outer_select_statement.join(',')
+        sum_definition = parts[:select].first
+        original_columns = parts[:select].drop(1)
+
+        # Collect a list of all renamed columns from the original query so that we can include
+        # these in the outer query.
+        renamed_columns = []
+        original_columns.each do |sel|
+          renamed_columns << sel.split(' AS ').last
+        end
 
         # In some situations the column we're summing over is not included as a part of the aggregation
         # in the inner query. In such cases we must explicitly select the desired column in the inner
         # query, so that we can sum over it in the outer query.
-        if select_aggregate.include?("CASE")
-          selection_metric = ",#{select_aggregate.split('CASE WHEN ').last.split(' ').first}"
-        else
-          selection_metric = ''
-        end
+        summation_metric = if select_aggregate.include?("CASE")
+                             select_aggregate.split('CASE WHEN ').last.split(' ').first
+                           else
+                             ''
+                           end
 
-        inner_columns = ",#{inner_select_statement.join(',')}"
-        if selection_metric && !inner_columns.include?(selection_metric)
-          inner_columns = "#{selection_metric}#{inner_columns}"
-        end
-
-        inner_select = "SELECT #{distinct}, #{fact_model.measure.to_s} #{inner_columns}"
+        outer_columns = ([sum_definition] << renamed_columns).flatten.uniq.join(', ')
+        inner_columns = (original_columns << [summation_metric, fact_model.measure.to_s]).flatten.uniq.reject(&:blank?).join(', ').remove("\n").squeeze(' ')
         inner_from = statement.to_sql.split('FROM').last
-        group_by = group_by_statement
-
+        group_by = outer_group_by_statement.join(', ')
 
         # Finally, construct the query we want and return it as a string
-        "SELECT #{outer_select} FROM(#{inner_select} FROM #{inner_from}) AS T #{group_by}"
+        full_statement = "SELECT #{outer_columns} FROM(SELECT #{distinct}, #{inner_columns} FROM #{inner_from}) AS T"
+
+        # Add the GROUP BY clause only if it's non nil and non empty
+        full_statement = "#{full_statement} GROUP BY #{group_by}" if group_by.present?
+
+        full_statement
 
       else
         parts = {
@@ -126,17 +134,6 @@ module ActiveReporting
       ss.flatten
     end
 
-    def outer_select_statement
-      ss = ["#{select_aggregate} AS #{@metric.name}"]
-      ss += @dimensions.map { |d| d.select_statement_no_rename(with_identifier: @dimension_identifiers) }
-      ss.flatten
-    end
-
-    def inner_select_statement
-      ss = @dimensions.map { |d| d.select_statement_always_rename(with_identifier: @dimension_identifiers) }
-      ss.flatten
-    end
-
     def distinct
       "DISTINCT `#{@metric.model.name_without_component.downcase.pluralize}`.`id`"
     end
@@ -162,6 +159,10 @@ module ActiveReporting
 
     def group_by_statement
       @dimensions.map { |d| d.group_by_statement(with_identifier: @dimension_identifiers) }
+    end
+
+    def outer_group_by_statement
+      @dimensions.map { |d| d.group_by_statement_with_rename(with_identifier: @dimension_identifiers) }
     end
 
     def process_scope_dimension_filter(chain)

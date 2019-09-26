@@ -40,30 +40,6 @@ module ActiveReporting
       ss
     end
 
-    # Fragments of a select statement for queries that use the dimension
-    # but where we always want to rename, even if the fragment is degenerate
-    # (aka if it is not a foreign key)
-    #
-    # @return [Array]
-    def select_statement_always_rename(with_identifier: true)
-      return [name] if type == Dimension::TYPES[:degenerate]
-      ss = ["#{label_fragment} AS #{name}"]
-      ss << "#{identifier_fragment} AS #{name}_identifier" if with_identifier
-      ss
-    end
-
-    # Fragment of a select statement for queries that use a dimension
-    # but without renaming returned columnns with 'AS'
-    #
-    # @return [ARRAY]
-    def select_statement_no_rename(with_identifier: true)
-      return [name] if type == Dimension::TYPES[:degenerate]
-
-      ss = ["#{name}"]
-      ss << "#{name}_identifier" if with_identifier
-      ss
-    end
-
     # Fragments of a group by clause for queries that use the dimension
     #
     # @return [Array]
@@ -72,6 +48,19 @@ module ActiveReporting
 
       group = [label_fragment]
       group << identifier_fragment if with_identifier
+      group
+    end
+
+    # Fragments of a group by clause for queries that use the dimension, using
+    # the renamed label. Note that we do not rename the fragment if it
+    # is degenerate (aka if it is not a foreign key)
+    #
+    # @return [Array]
+    def group_by_statement_with_rename(with_identifier: true)
+      return [degenerate_fragment] if type == Dimension::TYPES[:degenerate]
+
+      group = [name]
+      group << "#{name}_identifier" if with_identifier
       group
     end
 
