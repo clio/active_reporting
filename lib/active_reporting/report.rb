@@ -100,7 +100,12 @@ module ActiveReporting
         group_by = outer_group_by_statement.join(', ')
 
         # Finally, construct the query we want and return it as a string
-        "SELECT #{outer_columns} FROM(SELECT #{distinct}, #{inner_columns} FROM #{inner_from}) AS T GROUP BY #{group_by}"
+        full_statement = "SELECT #{outer_columns} FROM(SELECT #{distinct}, #{inner_columns} FROM #{inner_from}) AS T"
+
+        # Add the GROUP BY clause only if it's non nil and non empty
+        full_statement = "#{full_statement} GROUP BY #{group_by}" if group_by.present?
+
+        full_statement
 
       else
         parts = {
