@@ -96,7 +96,7 @@ module ActiveReporting
 
         outer_columns = ([sum_definition] << renamed_columns).flatten.uniq.join(', ')
         inner_columns = (original_columns << [summation_metric, fact_model.measure.to_s]).flatten.uniq.reject(&:blank?).join(', ').remove("\n").squeeze(' ')
-        inner_from = statement.to_sql.split('FROM').last
+        inner_from = statement.to_sql.split(' FROM ', 2).last
         group_by = outer_group_by_statement.join(', ')
 
         # Finally, construct the query we want and return it as a string
